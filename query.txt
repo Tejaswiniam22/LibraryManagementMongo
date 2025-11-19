@@ -1,0 +1,159 @@
+db.books.insertMany([
+  {
+    "_id": "Book1",
+    "title": "The Alchemist",
+    "author": "Paulo Coelho",
+    "genre": "Fiction",
+    "publishedYear": 1988
+  },
+  {
+    "_id": "Book2",
+    "title": "Clean Code",
+    "author": "Robert C. Martin",
+    "genre": "Programming",
+    "publishedYear": 2008
+  },
+  {
+    "_id": "Book3",
+    "title": "1984",
+    "author": "George Orwell",
+    "genre": "Dystopian",
+    "publishedYear": 1949
+  },
+  {
+    "_id": "Book4",
+    "title": "Atomic Habits",
+    "author": "James Clear",
+    "genre": "Self-help",
+    "publishedYear": 2018
+  },
+  {
+    "_id": "Book5",
+    "title": "The Pragmatic Programmer",
+    "author": "Andy Hunt",
+    "genre": "Programming",
+    "publishedYear": 1999
+  }
+]);
+
+db.borrowers.insertMany([
+  { "_id": "User1", "name": "Alice", "email": "alice@example.com", "membershipDate": ISODate("2023-01-15") },
+  { "_id": "User2", "name": "Bob", "email": "bob@example.com", "membershipDate": ISODate("2023-02-10") },
+  { "_id": "User3", "name": "Charlie", "email": "charlie@example.com", "membershipDate": ISODate("2023-03-05") },
+  { "_id": "User4", "name": "David", "email": "david@example.com", "membershipDate": ISODate("2023-04-12") }
+]);
+
+db.loans.insertMany([
+  { "_id": "Loan1", "bookId": "Book1", "borrowerId": "User1", "loanDate": ISODate("2023-05-01"), "returnDate": ISODate("2023-05-15"), "status": "Returned" },
+  { "_id": "Loan2", "bookId": "Book2", "borrowerId": "User1", "loanDate": ISODate("2023-05-20"), "returnDate": null, "status": "Borrowed" },
+  { "_id": "Loan3", "bookId": "Book3", "borrowerId": "User2", "loanDate": ISODate("2023-04-10"), "returnDate": ISODate("2023-04-25"), "status": "Returned" },
+  { "_id": "Loan4", "bookId": "Book2", "borrowerId": "User3", "loanDate": ISODate("2023-05-05"), "returnDate": null, "status": "Borrowed" },
+  { "_id": "Loan5", "bookId": "Book4", "borrowerId": "User1", "loanDate": ISODate("2023-03-01"), "returnDate": ISODate("2023-03-10"), "status": "Returned" },
+  { "_id": "Loan6", "bookId": "Book1", "borrowerId": "User4", "loanDate": ISODate("2023-05-01"), "returnDate": ISODate("2023-05-15"), "status": "Returned" },
+  { "_id": "Loan7", "bookId": "Book5", "borrowerId": "User3", "loanDate": ISODate("2023-06-01"), "returnDate": null, "status": "Borrowed" },
+  { "_id": "Loan8", "bookId": "Book2", "borrowerId": "User1", "loanDate": ISODate("2023-06-15"), "returnDate": null, "status": "Borrowed" },
+  { "_id": "Loan9", "bookId": "Book2", "borrowerId": "User1", "loanDate": ISODate("2023-07-01"), "returnDate": null, "status": "Borrowed" }
+]);
+
+db.loans.aggregate([
+  { $lookup: { from: "borrowers", localField: "borrowerId", foreignField: "_id", as: "borrower" } },
+  { $unwind: "$borrower" },
+  { $lookup: { from: "books", localField: "bookId", foreignField: "_id", as: "book" } },
+  { $unwind: "$book" },
+  { $group: {
+      _id: { borrowerId: "$borrower._id", name: "$borrower.name" },
+      books: { $addToSet: "$book.title" }
+    }
+  },
+  { $project: { _id: 0, borrowerId: "$_id.borrowerId", name: "$_id.name", books: 1 } }
+]);
+
+db.loans.aggregate([
+  { $group: { _id: "$bookId", borrowCount: { $sum: 1 } } },
+  { $lookup: { from: "books", localField: "_id", foreignField: "_id", as: "book" } },
+  { $unwind: "$book" },
+  { $project: { _id: 0, bookId: "$_id", title: "$book.title", borrowCount: 1 } },
+  { $sort: { borrowCount: -1 } },
+  { $limit: 3 }
+]);
+
+db.loans.aggregate([
+  { $match: { borrowerId: "User1" } },
+  { $lookup: { from: "books", localField: "bookId", foreignField: "_id", as: "book" } },
+  { $unwind: "$book" },
+  { $project: { _id: 1, title: "$book.title", author: "$book.author", genre: "$book.genre", loanDate: 1, returnDate: 1, status: 1 } },
+  { $sort: { loanDate: -1 } }
+]);
+
+db.loans.aggregate([
+  { $group: { _id: "$borrowerId", totalBorrowed: { $sum: 1 } } },
+  { $match: { totalBorrowed: { $gt: 2 } } },
+  { $lookup: { from: "borrowers", localField: "_id", foreignField: "_id", as: "borrower" } },
+  { $unwind: "$borrower" },
+  { $project: { _id: 0, borrowerId: "$_id", name: "$borrower.name", totalBorrowed: 1 } }
+]);
+
+db.loans.aggregate([
+  { $lookup: { from: "borrowers", localField: "borrowerId", foreignField: "_id", as: "borrower" } },
+  { $unwind: "$borrower" },
+  { $lookup: { from: "books", localField: "bookId", foreignField: "_id", as: "book" } },
+  { $unwind: "$book" },
+  { $project: { _id: 1, borrowerName: "$borrower.name", bookTitle: "$book.title", loanDate: 1, returnDate: 1, status: 1 } },
+  { $sort: { loanDate: -1 } }
+]);
+
+db.loans.aggregate([
+  { $lookup: { from: "books", localField: "bookId", foreignField: "_id", as: "book" } },
+  { $unwind: "$book" },
+  { $group: { _id: "$book.genre", borrowedCount: { $sum: 1 } } },
+  { $project: { _id: 0, genre: "$_id", borrowedCount: 1 } },
+  { $sort: { borrowedCount: -1 } }
+]);
+
+db.loans.aggregate([
+  { $match: { status: "Borrowed" } },
+  { $lookup: { from: "borrowers", localField: "borrowerId", foreignField: "_id", as: "borrower" } },
+  { $unwind: "$borrower" },
+  { $lookup: { from: "books", localField: "bookId", foreignField: "_id", as: "book" } },
+  { $unwind: "$book" },
+  { $project: { _id: 1, borrowerName: "$borrower.name", bookTitle: "$book.title", loanDate: 1 } },
+  { $sort: { loanDate: 1 } }
+]);
+
+db.loans.aggregate([
+  { $match: { status: "Returned" } },
+  { $group: { _id: "$borrowerId", returnedCount: { $sum: 1 } } },
+  { $lookup: { from: "borrowers", localField: "_id", foreignField: "_id", as: "borrower" } },
+  { $unwind: "$borrower" },
+  { $project: { _id: 0, borrowerId: "$_id", name: "$borrower.name", returnedCount: 1 } }
+]);
+
+db.loans.aggregate([
+  { $lookup: { from: "books", localField: "bookId", foreignField: "_id", as: "book" } },
+  { $unwind: "$book" },
+  { $group: {
+      _id: "$borrowerId",
+      genresBorrowed: { $addToSet: "$book.genre" },
+      totalLoans: { $sum: 1 }
+    }
+  },
+  { $project: { borrowerId: "$_id", genresBorrowed: 1, genreCount: { $size: "$genresBorrowed" }, totalLoans: 1 } },
+  { $match: { genreCount: { $gt: 1 } } },
+  { $lookup: { from: "borrowers", localField: "borrowerId", foreignField: "_id", as: "borrower" } },
+  { $unwind: "$borrower" },
+  { $project: { _id: 0, borrowerId: 1, name: "$borrower.name", genreCount: 1, genresBorrowed: 1, totalLoans: 1 } }
+]);
+
+db.loans.aggregate([
+  { $group: { _id: "$borrowerId", totalBorrowCount: { $sum: 1 } } },
+  { $lookup: { from: "borrowers", localField: "_id", foreignField: "_id", as: "borrower" } },
+  { $unwind: "$borrower" },
+  { $project: { _id: 0, borrowerId: "$_id", name: "$borrower.name", totalBorrowCount: 1 } },
+  { $sort: { totalBorrowCount: -1 } }
+]);
+
+db.borrowers.aggregate([
+  { $lookup: { from: "loans", localField: "_id", foreignField: "borrowerId", as: "loans" } },
+  { $project: { _id: 0, borrowerId: "$_id", name: 1, totalBorrowCount: { $size: "$loans" } } },
+  { $sort: { totalBorrowCount: -1 } }
+]);
